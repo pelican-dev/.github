@@ -1,0 +1,84 @@
+name: Redirect check
+
+# GitHub still forwards github.com/pelican-dev/<repo> to github.com/pelican/<repo>, which is
+# why there are no stub repos in this org. Creating one would replace a working forward with a
+# dead end. This job watches for the day that stops being true.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Old org redirects
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that the old URLs still forward
+        id: check
+        run: |
+          broken=""
+          for repo in docs panel plugins whmcs wings; do
+            expected="https://github.com/pelican/$repo"
+            actual=$(curl -s -o /dev/null -w '%{redirect_url}' "https://github.com/pelican-dev/$repo")
+            if [ "$actual" = "$expected" ]; then
+              echo "ok      $repo -> $actual"
+            else
+              echo "broken  $repo -> ${actual:-(no redirect)}, expected $expected"
+              broken="$broken $repo"
+            fi
+          done
+          broken="${broken# }"
+          echo "broken=$broken" >> "$GITHUB_OUTPUT"
+          if [ -n "$broken" ]; then
+            echo "::error::Redirects no longer working for: $broken"
+            exit 1
+          fi
+          echo "All five redirects are still working."
+
+      - name: Open an issue when a redirect breaks
+        if: failure() && steps.check.outputs.broken != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BROKEN: ${{ steps.check.outputs.broken }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create redirect-check \
+            --description "Old pelican-dev redirect monitoring" \
+            --color B60205 --force
+
+          existing=$(gh issue list --label redirect-check --state open --json number --jq '.[0].number // empty')
+
+          if [ -n "$existing" ]; then
+            cat > comment.md <<EOF
+          Still broken as of $(date -u +%Y-%m-%d), affecting:$BROKEN
+
+          $RUN_URL
+          EOF
+            gh issue comment "$existing" --body-file comment.md
+            exit 0
+          fi
+
+          cat > issue.md <<EOF
+          GitHub has stopped forwarding some of the old pelican-dev URLs, which affects:$BROKEN
+
+          Up to now every old link still forwarded on its own, so this org was deliberately left
+          empty rather than filled with stub repos, because a stub would have replaced a working
+          forward with a dead end.
+
+          That tradeoff is gone for the repositories listed above, so the fix now is to create a
+          stub repo in this org under each of those names, pointing people at
+          https://github.com/pelican the same way the org profile README does. Leave the ones
+          that are still forwarding alone.
+
+          Checked by \`.github/workflows/redirect-check.yml\`, run: $RUN_URL
+          EOF
+
+          gh issue create \
+            --label redirect-check \
+            --title "Old org redirects have stopped working" \
+            --body-file issue.md
