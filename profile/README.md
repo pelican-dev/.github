@@ -11,4 +11,4 @@ Most old links should still forward you along on their own, so if you've ended u
 
 Nothing new is ever going to be published under this org, so if you come across something that looks like an active pelican-dev repository, it isn't ours and you should be careful with it.
 
-If you're stuck on something, come find us on [Discord](https://discord.gg/pelican).
+If you're stuck on something, come find us on [Discord](https://discord.com/invite/pelican-panel).
