@@ -44,6 +44,8 @@ jobs:
         if: failure() && steps.check.outputs.broken != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Nothing is checked out here, so gh has no git remote to infer the repo from
+          GH_REPO: ${{ github.repository }}
           BROKEN: ${{ steps.check.outputs.broken }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
